@@ -1,7 +1,6 @@
 import hashlib
 from colorama import init, Fore
 from datetime import datetime
-import os
 
 # Initialize colorama
 init()
@@ -31,7 +30,7 @@ def generate_sha256(text):
         text.encode()
     ).hexdigest()
 
-# Generate file hash
+# Generate SHA256 hash for file
 def hash_file(filepath):
 
     sha256 = hashlib.sha256()
@@ -55,35 +54,76 @@ def hash_file(filepath):
 
         return None
 
-# File integrity checker
-def check_integrity(filepath, original_hash):
+# Create baseline
+def save_baseline(filepath):
+
+    file_hash = hash_file(filepath)
+
+    if file_hash is None:
+
+        return False
+
+    with open("hash_database.txt", "a") as db:
+
+        db.write(
+            f"{filepath}|{file_hash}\n"
+        )
+
+    return True
+
+# Verify file against baseline
+def verify_baseline(filepath):
 
     current_hash = hash_file(filepath)
 
     if current_hash is None:
 
-        return "File not found!"
+        return "File not found"
 
-    elif current_hash == original_hash:
+    try:
 
-        return "File Integrity VERIFIED"
+        with open("hash_database.txt", "r") as db:
 
-    else:
+            for line in db:
 
-        return "WARNING: File has been MODIFIED!"
+                saved_path, saved_hash = (
+                    line.strip().split("|")
+                )
+
+                if saved_path == filepath:
+
+                    if saved_hash == current_hash:
+
+                        return "VERIFIED"
+
+                    else:
+
+                        return "MODIFIED"
+
+        return "No baseline found"
+
+    except:
+
+        return "Database missing"
 
 # Main program loop
 while True:
 
-    print(Fore.CYAN + "\n=== Hash Generator & Integrity Monitor ===")
+    print(
+        Fore.CYAN +
+        "\n=== Hash Generator & Integrity Monitor ==="
+    )
 
     print(Fore.YELLOW + "1. Generate MD5 Hash")
     print(Fore.YELLOW + "2. Generate SHA256 Hash")
-    print(Fore.YELLOW + "3. Hash File")
-    print(Fore.YELLOW + "4. Check File Integrity")
+    print(Fore.YELLOW + "3. Create File Baseline")
+    print(Fore.YELLOW + "4. Verify File Integrity")
     print(Fore.YELLOW + "5. Exit")
 
-    choice = input(Fore.WHITE + "Choose option: ")
+    choice = input(
+        Fore.WHITE +
+        "Choose option: "
+    )
 
     # MD5 Hash
     if choice == "1":
@@ -101,7 +141,7 @@ while True:
         )
 
         write_log(
-            f"Generated MD5 Hash"
+            "Generated MD5 hash"
         )
 
     # SHA256 Hash
@@ -120,10 +160,10 @@ while True:
         )
 
         write_log(
-            f"Generated SHA256 Hash"
+            "Generated SHA256 hash"
         )
 
-    # Hash File
+    # Create Baseline
     elif choice == "3":
 
         filepath = input(
@@ -131,27 +171,29 @@ while True:
             "Enter file path: "
         )
 
-        result = hash_file(filepath)
-
-        if result:
+        if save_baseline(filepath):
 
             print(
                 Fore.GREEN +
-                f"\nFile SHA256 Hash:\n{result}"
+                "\nBaseline created successfully."
             )
 
             write_log(
-                f"Generated file hash for {filepath}"
+                f"Baseline created for {filepath}"
             )
 
         else:
 
             print(
                 Fore.RED +
-                "\nCould not read file!"
+                "\nFailed to create baseline."
             )
 
-    # Integrity Check
+            write_log(
+                f"Failed baseline creation for {filepath}"
+            )
+
+    # Verify Integrity
     elif choice == "4":
 
         filepath = input(
@@ -159,41 +201,44 @@ while True:
             "Enter file path: "
         )
 
-        original_hash = input(
-            Fore.WHITE +
-            "Enter original hash: "
-        )
+        result = verify_baseline(filepath)
 
-        result = check_integrity(
-            filepath,
-            original_hash
-        )
-
-        # Verified
-        if "VERIFIED" in result:
+        if result == "VERIFIED":
 
             print(
                 Fore.GREEN +
-                f"\n{result}"
+                "\nFile Integrity VERIFIED"
             )
 
-        # Modified
-        else:
+        elif result == "MODIFIED":
 
             print(
                 Fore.RED +
+                "\nWARNING: File Modified!"
+            )
+
+        else:
+
+            print(
+                Fore.YELLOW +
                 f"\n{result}"
             )
 
-        write_log(result)
+        write_log(
+            f"Integrity check: {filepath} -> {result}"
+        )
 
     # Exit
     elif choice == "5":
 
-        print(Fore.CYAN + "Goodbye!")
+        print(
+            Fore.CYAN +
+            "Goodbye!"
+        )
+
         break
 
-    # Invalid option
+    # Invalid choice
     else:
 
         print(

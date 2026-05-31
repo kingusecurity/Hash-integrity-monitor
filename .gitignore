@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 hash_log.txt
+hash_database.txt
