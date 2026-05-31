@@ -1,36 +1,46 @@
 import hashlib
+import os
 from colorama import init, Fore
 from datetime import datetime
 
 # Initialize colorama
-init()
+init(autoreset=True)
 
-# Logging function
+DATABASE_FILE = "hash_database.txt"
+LOG_FILE = "hash_log.txt"
+
+
+# Logging Function
 def write_log(message):
 
-    with open("hash_log.txt", "a") as log_file:
+    with open(LOG_FILE, "a") as log_file:
 
-        timestamp = datetime.now()
+        timestamp = datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
         log_file.write(
             f"[{timestamp}] {message}\n"
         )
 
-# Generate MD5 hash
+
+# Generate MD5 Hash
 def generate_md5(text):
 
     return hashlib.md5(
         text.encode()
     ).hexdigest()
 
-# Generate SHA256 hash
+
+# Generate SHA256 Hash
 def generate_sha256(text):
 
     return hashlib.sha256(
         text.encode()
     ).hexdigest()
 
-# Generate SHA256 hash for file
+
+# Hash File
 def hash_file(filepath):
 
     sha256 = hashlib.sha256()
@@ -39,97 +49,162 @@ def hash_file(filepath):
 
         with open(filepath, "rb") as file:
 
-            while True:
+            while chunk := file.read(4096):
 
-                data = file.read(4096)
-
-                if not data:
-                    break
-
-                sha256.update(data)
+                sha256.update(chunk)
 
         return sha256.hexdigest()
 
-    except:
+    except Exception:
 
         return None
 
-# Create baseline
-def save_baseline(filepath):
 
-    file_hash = hash_file(filepath)
-
-    if file_hash is None:
-
-        return False
-
-    with open("hash_database.txt", "a") as db:
-
-        db.write(
-            f"{filepath}|{file_hash}\n"
-        )
-
-    return True
-
-# Verify file against baseline
-def verify_baseline(filepath):
-
-    current_hash = hash_file(filepath)
-
-    if current_hash is None:
-
-        return "File not found"
+# Create Directory Baseline
+def create_directory_baseline(folder):
 
     try:
 
-        with open("hash_database.txt", "r") as db:
+        with open(DATABASE_FILE, "w") as db:
+
+            for root, dirs, files in os.walk(folder):
+
+                for file in files:
+
+                    filepath = os.path.join(
+                        root,
+                        file
+                    )
+
+                    file_hash = hash_file(
+                        filepath
+                    )
+
+                    if file_hash:
+
+                        db.write(
+                            f"{filepath}|{file_hash}\n"
+                        )
+
+        return True
+
+    except Exception:
+
+        return False
+
+
+# Verify Directory Integrity
+def verify_directory(folder):
+
+    try:
+
+        baseline = {}
+
+        with open(DATABASE_FILE, "r") as db:
 
             for line in db:
 
-                saved_path, saved_hash = (
+                path, saved_hash = (
                     line.strip().split("|")
                 )
 
-                if saved_path == filepath:
+                baseline[path] = saved_hash
 
-                    if saved_hash == current_hash:
+        changes = []
 
-                        return "VERIFIED"
+        current_files = set()
 
-                    else:
+        for root, dirs, files in os.walk(folder):
 
-                        return "MODIFIED"
+            for file in files:
 
-        return "No baseline found"
+                filepath = os.path.join(
+                    root,
+                    file
+                )
 
-    except:
+                current_files.add(
+                    filepath
+                )
 
-        return "Database missing"
+                current_hash = hash_file(
+                    filepath
+                )
 
-# Main program loop
+                if filepath in baseline:
+
+                    if (
+                        current_hash
+                        != baseline[filepath]
+                    ):
+
+                        changes.append(
+                            f"MODIFIED: {filepath}"
+                        )
+
+                else:
+
+                    changes.append(
+                        f"NEW FILE: {filepath}"
+                    )
+
+        for saved_file in baseline:
+
+            if saved_file not in current_files:
+
+                changes.append(
+                    f"DELETED: {saved_file}"
+                )
+
+        return changes
+
+    except Exception:
+
+        return None
+
+
+# Main Program
 while True:
 
     print(
         Fore.CYAN +
-        "\n=== Hash Generator & Integrity Monitor ==="
+        "\n=== Directory Integrity Monitor ==="
     )
 
-    print(Fore.YELLOW + "1. Generate MD5 Hash")
-    print(Fore.YELLOW + "2. Generate SHA256 Hash")
-    print(Fore.YELLOW + "3. Create File Baseline")
-    print(Fore.YELLOW + "4. Verify File Integrity")
-    print(Fore.YELLOW + "5. Exit")
+    print(
+        Fore.YELLOW +
+        "1. Generate MD5 Hash"
+    )
+
+    print(
+        Fore.YELLOW +
+        "2. Generate SHA256 Hash"
+    )
+
+    print(
+        Fore.YELLOW +
+        "3. Create Directory Baseline"
+    )
+
+    print(
+        Fore.YELLOW +
+        "4. Verify Directory Integrity"
+    )
+
+    print(
+        Fore.YELLOW +
+        "5. Exit"
+    )
 
     choice = input(
         Fore.WHITE +
         "Choose option: "
     )
 
-    # MD5 Hash
+    # MD5
     if choice == "1":
 
         text = input(
-            Fore.WHITE +
             "Enter text: "
         )
 
@@ -137,18 +212,17 @@ while True:
 
         print(
             Fore.GREEN +
-            f"\nMD5 Hash:\n{result}"
+            f"\nMD5:\n{result}"
         )
 
         write_log(
             "Generated MD5 hash"
         )
 
-    # SHA256 Hash
+    # SHA256
     elif choice == "2":
 
         text = input(
-            Fore.WHITE +
             "Enter text: "
         )
 
@@ -156,7 +230,7 @@ while True:
 
         print(
             Fore.GREEN +
-            f"\nSHA256 Hash:\n{result}"
+            f"\nSHA256:\n{result}"
         )
 
         write_log(
@@ -166,12 +240,13 @@ while True:
     # Create Baseline
     elif choice == "3":
 
-        filepath = input(
-            Fore.WHITE +
-            "Enter file path: "
+        folder = input(
+            "Enter folder path: "
         )
 
-        if save_baseline(filepath):
+        if create_directory_baseline(
+            folder
+        ):
 
             print(
                 Fore.GREEN +
@@ -179,7 +254,7 @@ while True:
             )
 
             write_log(
-                f"Baseline created for {filepath}"
+                f"Created baseline for {folder}"
             )
 
         else:
@@ -189,44 +264,43 @@ while True:
                 "\nFailed to create baseline."
             )
 
-            write_log(
-                f"Failed baseline creation for {filepath}"
-            )
-
-    # Verify Integrity
+    # Verify
     elif choice == "4":
 
-        filepath = input(
-            Fore.WHITE +
-            "Enter file path: "
+        folder = input(
+            "Enter folder path: "
         )
 
-        result = verify_baseline(filepath)
+        changes = verify_directory(
+            folder
+        )
 
-        if result == "VERIFIED":
-
-            print(
-                Fore.GREEN +
-                "\nFile Integrity VERIFIED"
-            )
-
-        elif result == "MODIFIED":
+        if changes is None:
 
             print(
                 Fore.RED +
-                "\nWARNING: File Modified!"
+                "\nVerification failed."
+            )
+
+        elif len(changes) == 0:
+
+            print(
+                Fore.GREEN +
+                "\nNo changes detected."
             )
 
         else:
 
             print(
-                Fore.YELLOW +
-                f"\n{result}"
+                Fore.RED +
+                "\nChanges Found:\n"
             )
 
-        write_log(
-            f"Integrity check: {filepath} -> {result}"
-        )
+            for change in changes:
+
+                print(change)
+
+                write_log(change)
 
     # Exit
     elif choice == "5":
@@ -238,7 +312,6 @@ while True:
 
         break
 
-    # Invalid choice
     else:
 
         print(
